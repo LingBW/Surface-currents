@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Thu Sep 22 09:30:19 2016
-
+Surface currents,depth contour and drifter forecast tracks.Create at 3 Nov,2016.
 @author: Bingwei Ling
 """
 
@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
-from surface_Currents_M_functions100401 import get_fvcom,draw_basemap
+from surface_Currents_M_functions import get_fvcom,draw_basemap,get_drifter
 from matplotlib import animation
 import matplotlib as mpl
 from pydap.client import open_url
@@ -43,8 +43,8 @@ track_way = 'forward'    # Three options: backward, forward and both. 'both' onl
 image_style = 'plot'      # Two option: 'plot', animation
 # You can track form now by specify start_time = datetime.now(pytz.UTC) 
 #start_time = datetime(2013,10,19,12,0,0,0)#datetime.now(pytz.UTC) 
-start_time = datetime.utcnow()
-end_time = start_time + timedelta(hours=track_hours)
+#start_time = datetime.utcnow()
+#end_time = start_time + timedelta(hours=track_hours)
 
 model_boundary_switch = 'ON' # OFF or ON. Only apply to FVCOM
 streamline = 'OFF'
@@ -57,62 +57,87 @@ save_dir = './Results/'
 #colors = ['#99ffff','#b3ffff','#ccffff','#e6ffff','#ffffff','#ffebe6','#ffc2b3','#ff9980','#ff704d','#ff471a','#e62e00','#b32400'] #16
 colors = ['#00bfff','#00ffff','#00ffbf','#00ff80','#80ff00','#bfff00','#ffff00','#ffbf00','#ff8000','#ff4000']
 cmap = mpl.colors.ListedColormap(colors)
-
+'''
 utcti = datetime.utcnow(); utct = utcti.strftime('%H')
 locti = datetime.now(); loct = locti.strftime('%H')
 ditnu = int(utct)-int(loct) # the deference between UTC and local time .
 if ditnu < 0:
     ditnu = int(utct)+24-int(loct)
-locstart_time = start_time - timedelta(hours=ditnu)
+locstart_time = start_time - timedelta(hours=ditnu)#'''
 
 ################################## Option ####################################
 centerpoint = (41.91,-70.233)
-bordersidele = 0.22
+#centerpoint = (41.977,-70.375)
+bordersidele = 0.2
 #lats = get_obj.points_square(centerpoint,0.1)
+############################## Drifter parts ##################################
+drifterIDs = ['160410706']#,'1604107014''160410704',,'160410707'
+clrs = ['b','g','m','y','c']
+INPUT_DATA = 'drift_X.dat'
+track_days = 2 #the days of real drifter track.
+dstart_time = datetime.utcnow()-timedelta(track_days)
+
+drifter_points = {} #dict(lon=[],lat=[])
+print 'Get drifter_points'
+start_times = []
+for i in drifterIDs:
+    dps = []; 
+    drifter = get_drifter(i, INPUT_DATA)
+    dr_points = drifter.get_track(dstart_time,track_days)
+    dps.append(dr_points['lon']); dps.append(dr_points['lat'])
+    start_times.append(dr_points['time'][-1])
+    drifter_points[i]=dps
+start_time = min(start_times) # datetime.utcnow()
+end_time = start_time + timedelta(hours=track_hours)
+
 
 ############################## Common codes ###################################
 
-#loop_length = []
-fig = plt.figure() #figsize=(16,9)
-ax = fig.add_subplot(111)
-points = {'lats':[],'lons':[]}  # collect all points we've gained
-#points['lons'].extend(lons);points['lats'].extend(lats)
-#ax.plot(lats,lons,'bo',markersize=3)
-#draw_basemap(ax, points)  # points is using here  
-#plt.show()    
+points = {'lats':[],'lons':[]}  # collect all points we've gained   
 
 get_obj = get_fvcom(MODEL)
 toltime = get_obj.get_url(start_time,end_time)
 b_points,psqus = get_obj.get_data(centerpoint,bordersidele)# b_points is model boundary points.
+points['lons'].extend(psqus[1]);points['lats'].extend(psqus[0])
+model_points = {};
+print 'Get model_points'
+for j in range(len(drifterIDs)):
+    dlon = drifter_points[drifterIDs[j]][0][-1]
+    dlat = drifter_points[drifterIDs[j]][1][-1]
+    mdp = get_obj.get_dtrack(start_times[j],dlon,dlat,track_way)
+    model_points[drifterIDs[j]] = mdp
 # Core codes
 currents_points = {}
+print 'Get currents_points'
 for j in range(track_hours):#len(toltime)
     #if j==0 or (j+1)%2==0 :
     if j%3==0:
-        cpoints = get_obj.current_track(j)
-        currents_points[toltime[j]] = cpoints
-points['lons'].extend(psqus[1]);points['lats'].extend(psqus[0]) 
+        print j
+        cpoints = get_obj.current_track(j,track_way)
+        currents_points[toltime[j]] = cpoints#'''
+ 
    
-try:
+'''try:
     pd.DataFrame(currents_points).to_csv(st_run_time.strftime("%d-%b-%Y_%H:%M")+'currents_points.csv')
     #np.save('currents_points',np.array(currents_points))
 except:
     print 'Failed to save the data to a file.'
-    pass
+    pass#'''
 #lcp = len(currents_points)
-spds = []
-for a in currents_points:
-    lb = currents_points[a]
-    for i in range(len(lb)):
-        spds.extend(lb[i]['spd'])#;points['lats'].extend(cpoints[i]['lat']);   
-        '''if len(cpoints[i]['time']) > len(maxtime):
-            maxtime = cpoints[i]['time']#'''
+
+#loop_length = []
+fig = plt.figure() #figsize=(16,9)
+ax = fig.add_subplot(111)
+
 crang = np.linspace(0,2.0, num=10) #color range
 norm = mpl.colors.Normalize(vmin=0, vmax=2.0)
 #minspd = np.argmin(crang-speed)
 #ax.plot(points['lons'],points['lats'])
 #ax.plot(psqus[1],psqus[0])
 draw_basemap(ax, points)  # points is using here
+#ax.plot(model_points['1604107018']['lon'],model_points['1604107018']['lat'],'r-')
+#ax.plot(drifter_points['1604107018'][0],drifter_points['1604107018'][1],'b-')
+
 levels=np.arange(-80,0,10)
 ss=1
 cont_range = [-3,0]
@@ -151,9 +176,19 @@ def animate(n): #del ax.collections[:]; del ax.lines[:]; ax.cla(); ax.lines.remo
         Time = (locstart_time+timedelta(hours=n)).strftime("%d-%b-%Y %H:%M")#'''
     #plt.suptitle('%.f%% simulated drifters ashore\n%d days, %d m, %s'%(int(round(p)),track_days,depth,Time))
     #plt.suptitle('Current model %d' % n)
+    ax.cla()
     plt.suptitle('FVCOM Surface Currents \n' + toltime[n].strftime("%d-%b-%Y %H:%M"))
     #del ax.lines[:] 
-    ax.cla()
+    for i in range(len(drifterIDs)):
+        lons = drifter_points[drifterIDs[i]][0]; lats = drifter_points[drifterIDs[i]][1];
+        ax.plot(lons,lats,'-',color=clrs[i],lw=3.)
+        #if any(model_points[i]['time']==toltime[n]):
+        if toltime[n] in model_points[drifterIDs[i]]['time']:
+            #du = model_points[i]['time'][model_points[i]['time']==toltime[n]].index[0]
+            du = model_points[drifterIDs[i]]['time'].index(toltime[n])
+            ax.plot(model_points[drifterIDs[i]]['lon'][:du+1],model_points[drifterIDs[i]]['lat'][:du+1],'-',color='r',lw=3.)
+        if toltime[n] > model_points[drifterIDs[i]]['time'][-1]:
+            ax.plot(model_points[drifterIDs[i]]['lon'],model_points[drifterIDs[i]]['lat'],'-',color='r',lw=3.)
     CS=ax.contour(X,Y,basemap_topo.topo[min_index_lat:max_index_lat:ss,index_minlon:index_maxlon:ss],levels,cmap=plt.cm.gist_earth,linewidths=0.5)
     ax.clabel(CS,fmt='%5.0f')#, np.arange(-80,0,20), inline=1)fontsize=3,
     ax.contourf(X,Y,basemap_topo.topo[min_index_lat:max_index_lat:ss,min_index_lon:max_index_lon:ss],[0,1000],colors='gray')
@@ -177,4 +212,5 @@ en_run_time = datetime.now()
 print 'Take '+str(en_run_time-st_run_time)+' running the code.\nStart at '+str(st_run_time)+'\nEnd at   '+str(en_run_time)
 #print 'Min-spd,max-spd',crang[0],crang[-1]
 anim.save(save_dir+'%s-%s_%s.gif'%(MODEL,track_way,en_run_time.strftime("%d-%b-%Y_%H:%M")),writer='imagemagick',dpi=250) #,,,fps=1
+
 plt.show()
