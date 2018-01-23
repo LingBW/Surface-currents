@@ -56,16 +56,16 @@ class get_fvcom():
         #lats=[]; lons=[]
         bbox = [lon-length, lon+length, lat-length, lat+length]
         bbox = np.array(bbox)
-        self.points = np.array([bbox[[0,1,1,0]],bbox[[2,2,3,3]]])
+        points = np.array([bbox[[0,1,1,0]],bbox[[2,2,3,3]]])
         #print points
-        pointt = self.points.T
+        pointt = points.T
         for i in pointt:
             ps.append((i[1],i[0]))
         ps.append((pointt[0][1],pointt[0][0]))# add first point one more time for Path.
         #lats.extend(points[1]); lons.extend(points[0])
         #bps = np.vstack((lon,lat)).T
         #return lats,lons
-        return ps
+        return ps, points
         
     def nearest_point(self, lon, lat, lons, lats, length):  #0.3/5==0.06
         '''Find the nearest point to (lon,lat) from (lons,lats),
@@ -224,27 +224,27 @@ class get_fvcom():
         self.b_points = np.vstack((lonb,latb)).T#'''
         #self.b_points = b_points
         (lat,lon) = point
-        self.lonl,self.latl = self.shrink_data(lon,lat,self.lonc,self.latc,leh)
+        self.lonl,self.latl,self.points= self.shrink_data(lon,lat,self.lonc,self.latc,leh)
         
         return self.b_points,self.points #,nv lons,lats,lonc,latc,,h,siglay
         
     def shrink_data(self,lon,lat,lons,lats,le):
         lont = []; latt = []
         #p = Path.circle((lon,lat),radius=rad)
-        self.psqus = self.points_square((lon,lat),le) # Got four point of rectangle with center point (lon,lat)
+        psqus, points = self.points_square((lon,lat),le) # Got four point of rectangle with center point (lon,lat)
         codes = [Path.MOVETO,Path.LINETO,Path.LINETO,Path.LINETO,Path.CLOSEPOLY,]
         #print psqus
-        self.sp = Path(self.psqus,codes)
+        sp = Path(psqus,codes)
         pints = np.vstack((lons,lats)).T
         for i in range(len(pints)):
-            if self.sp.contains_point(pints[i]):
+            if sp.contains_point(pints[i]):
                 lont.append(pints[i][0])
                 latt.append(pints[i][1])
         lonl=np.array(lont); latl=np.array(latt)#'''
         if not lont:
             print 'Given point out of model area.'
             sys.exit()
-        return lonl,latl
+        return lonl,latl,points
         
     def eline_path(self,lon,lat):
         '''
@@ -316,21 +316,23 @@ class get_fvcom():
     def current_track(self,jn,track_way): #,point,leh):
         cts = []        
         #self.lonk,self.latk = self.shrink_data(lon,lat,self.lons,self.lats,leh)
-        epoints = np.vstack((self.lonl[::3],self.latl[::3])).T
+        epoints = np.vstack((self.lonl,self.latl)).T #[::3]
         numep = len(epoints)
         for i in range(numep):
-            #print '%d of %d, %d' % (i+1,numep,jn+1)
-            getk = self.get_track(jn,epoints[i][0],epoints[i][1],track_way)
-            #print type(getk['lon']),type(getk['lat']),type(getk['layer']),type(getk['spd'])
-            ld = min(len(getk['lon']),len(getk['lat']),len(getk['spd']))
-            for j in getk:
-                if len(getk[j])>ld:
-                    getk[j] = getk[j][:ld]
-            #print getk
-            pgetk = pd.DataFrame(getk)
             
-            #print pgetk
-            cts.append(pgetk)
+            if i%6 == jn%6: # indicates the points density
+                print '%d of %d, %d' % (i+1,numep,jn+1)
+                getk = self.get_track(jn,epoints[i][0],epoints[i][1],track_way)
+                #print type(getk['lon']),type(getk['lat']),type(getk['layer']),type(getk['spd'])
+                ld = min(len(getk['lon']),len(getk['lat']),len(getk['spd']))
+                for j in getk:
+                    if len(getk[j])>ld:
+                        getk[j] = getk[j][:ld]
+                #print getk
+                pgetk = pd.DataFrame(getk)
+                
+                #print pgetk
+                cts.append(pgetk)
         return cts
         
     def get_track(self,jnu,lon,lat,track_way): #,b_index,nvdepth,,bcon 
@@ -377,7 +379,7 @@ class get_fvcom():
             modpts['spd'].append(pspeed)
             if i == t-1:# stop when got the last point speed.
                 return modpts#,2
-            if i >= jnu+4:# break
+            if i >= jnu+6:# break
                 return modpts#,2
             #x,y = mapx(lon,lat)
             #temlon,temlat = mapx(x+dx,y+dy,inverse=True)            
@@ -505,8 +507,8 @@ def draw_basemap(ax, points, interval_lon=0.5, interval_lat=0.5):
     dmap.drawmeridians(np.arange(int(map_lon[0])-1,
                                  int(map_lon[1])+1,interval_lon),
                        labels=[0,0,0,1])
-    #dmap.drawcoastlines()
-    #dmap.fillcontinents(color='grey')
+    dmap.drawcoastlines()
+    dmap.fillcontinents(color='grey')
     dmap.drawmapboundary()
     #dmap.etopo()
     
@@ -528,7 +530,7 @@ class get_drifter():
         index = np.where(df[0]==int(did))[0]
         newData = df.ix[index]
         for k in newData[0].index:
-            dt1=datetime(2016, newData[2][k],newData[3][k],newData[4][k],newData[5][k])
+            dt1=datetime(2017, newData[2][k],newData[3][k],newData[4][k],newData[5][k])
             dtime.append(dt1)
         #print dtime
         return newData[8],newData[7],dtime,newData[9] # lat,lon,time,
@@ -573,6 +575,7 @@ class get_drifter():
             starttime = np.array(temp[2][0])
         if days:
             endtime = starttime + timedelta(days=days)
+            #print "starttime, nodes['time']", starttime, nodes['time']
             i = self.__cmptime(starttime, nodes['time'])
             j = self.__cmptime(endtime, nodes['time'])
             
